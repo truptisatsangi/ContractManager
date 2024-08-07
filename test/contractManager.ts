@@ -1,5 +1,4 @@
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
-import { Contract } from "ethers";
 import { ContractManager, ContractManager__factory } from "../typechain-types";
 
 const { expect } = require("chai");
@@ -13,6 +12,7 @@ describe("ContractManager", function () {
   let owner: SignerWithAddress;
   let addr1: SignerWithAddress;
   let addr2: SignerWithAddress;
+  let contractAddress: string;
 
   beforeEach(async function () {
     [owner, addr1, addr2] = await ethers.getSigners();
@@ -20,101 +20,135 @@ describe("ContractManager", function () {
     ContractManager = await ethers.getContractFactory("ContractManager", {});
 
     contractManager = await ContractManager.deploy();
+
+    contractAddress = await contractManager.getAddress();
+
     contractManager.giveCallPermission(
-      await contractManager.getAddress(),
+      contractAddress,
       "addAddresses(address,string)",
       owner.address,
     );
     contractManager.giveCallPermission(
-      await contractManager.getAddress(),
+      contractAddress,
       "updateDescription(address,string)",
       owner.address,
     );
     contractManager.giveCallPermission(
-      await contractManager.getAddress(),
+      contractAddress,
       "removeAddress(address)",
       owner.address,
     );
-
-    expect();
   });
 
   describe("addAddresses", function () {
     it("should add a new address with a description", async function () {
-      await contractManager
-        .connect(owner)
-        .addAddresses(addr1.address, "First address");
-      const description = await contractManager.addDescription(addr1.address);
+      await expect(
+        contractManager
+          .connect(owner)
+          .addAddresses(contractAddress, "First address"),
+      ).to.emit(contractManager, "AddAddress");
+      const description = await contractManager.addDescription(contractAddress);
       expect(description).to.equal("First address");
     });
 
-    it("should revert if the address is zero", async function () {
+    it("should revert if the address already exists", async function () {
+      await contractManager.addAddresses(contractAddress, "First address");
       await expect(
-        contractManager.addAddresses(zeroAddress, "Zero address"),
-      ).to.be.revertedWith("zero address not allowed");
+        contractManager.addAddresses(contractAddress, "Duplicate address"),
+      ).to.be.revertedWith("Address already exists");
     });
 
-    it("should revert if the address already exists", async function () {
-      await contractManager.addAddresses(addr1.address, "First address");
+    it("Reverts if contract address is invalid", async function () {
       await expect(
-        contractManager.addAddresses(addr1.address, "Duplicate address"),
-      ).to.be.revertedWith("Address already exists");
+        contractManager.addAddresses(addr1.address, "Wrong address"),
+      ).to.be.revertedWith("Not a valid address");
+    });
+
+    it("Reverts if zero address is passed", async function () {
+      await expect(
+        contractManager.addAddresses(zeroAddress, "Zero address"),
+      ).to.be.revertedWith("Not a valid address");
+    });
+
+    it("should revert if given description is empty", async function () {
+      await expect(
+        contractManager.addAddresses(contractAddress, ""),
+      ).to.be.revertedWithCustomError(
+        contractManager,
+        "EmptyDescriptionNotAllowed",
+      );
     });
   });
 
   describe("updateDescription", function () {
     it("should update the description of an existing address", async function () {
-      await contractManager.addAddresses(addr1.address, "First address");
-      await contractManager.updateDescription(
-        addr1.address,
-        "Updated description",
-      );
-      const description = await contractManager.addDescription(addr1.address);
+      await contractManager.addAddresses(contractAddress, "First address");
+      await expect(
+        contractManager.updateDescription(
+        contractAddress,
+          "Updated description",
+        ),
+      ).to.emit(contractManager, "UpdateDescription");
+      const description = await contractManager.addDescription(contractAddress);
       expect(description).to.equal("Updated description");
     });
 
     it("should revert if the address does not exist", async function () {
       await expect(
         contractManager.updateDescription(
-          addr1.address,
+            contractAddress,
           "Non-existent address",
         ),
       )
         .to.be.revertedWithCustomError(contractManager, "AddressNotExist")
-        .withArgs(addr1.address);
+        .withArgs(contractAddress);
+    });
+
+    it("should revert if given description is empty", async function () {
+      await expect(
+        contractManager.updateDescription(contractAddress, ""),
+      ).to.be.revertedWithCustomError(
+        contractManager,
+        "EmptyDescriptionNotAllowed",
+      );
     });
   });
 
   describe("removeAddress", function () {
     it("should remove an existing address and its description", async function () {
-      await contractManager.addAddresses(addr1.address, "First address");
-      await contractManager.removeAddress(addr1.address);
-      const description = await contractManager.addDescription(addr1.address);
+      await contractManager.addAddresses(contractAddress, "First address");
+      await expect(contractManager.removeAddress(contractAddress)).to.emit(
+        contractManager,
+        "RemoveAddress",
+      );
+      const description = await contractManager.addDescription(contractAddress);
       expect(description).to.equal("");
     });
 
     it("should revert if the address does not exist", async function () {
-      await expect(contractManager.removeAddress(addr1.address))
+      await expect(contractManager.removeAddress(contractAddress))
         .to.be.revertedWithCustomError(contractManager, "AddressNotExist")
-        .withArgs(addr1.address);
+        .withArgs(contractAddress);
     });
   });
 
   describe("Access control", function () {
     it("should allow the owner to add, update, and remove addresses", async function () {
-      await expect(contractManager.addAddresses(addr1.address, "Owner address"))
+      await expect(
+        contractManager.addAddresses(contractAddress, "Owner address"),
+      )
         .to.emit(contractManager, "AddAddress")
-        .withArgs(addr1.address);
+        .withArgs(contractAddress);
 
       await expect(
-        contractManager.updateDescription(addr1.address, "Updated by owner"),
+        contractManager.updateDescription(contractAddress, "Updated by owner"),
       )
         .to.emit(contractManager, "UpdateDescription")
-        .withArgs(addr1.address);
+        .withArgs(contractAddress);
 
-      await expect(contractManager.removeAddress(addr1.address))
+      await expect(contractManager.removeAddress(contractAddress))
         .to.emit(contractManager, "RemoveAddress")
-        .withArgs(addr1.address);
+        .withArgs(contractAddress);
     });
 
     it("should revert when a non-owner tries to add, update, or remove addresses", async function () {
@@ -124,16 +158,16 @@ describe("ContractManager", function () {
           .addAddresses(addr2.address, "Addr2 address"),
       ).to.be.revertedWithCustomError(contractManager, "Unauthorized");
 
-      await contractManager.addAddresses(addr1.address, "Addr1 address");
+      await contractManager.addAddresses(contractAddress, "Addr1 address");
 
       await expect(
         contractManager
           .connect(addr1)
-          .updateDescription(addr1.address, "Updated by addr1"),
+          .updateDescription(contractAddress, "Updated by addr1"),
       ).to.be.revertedWithCustomError(contractManager, "Unauthorized");
 
       await expect(
-        contractManager.connect(addr1).removeAddress(addr1.address),
+        contractManager.connect(addr1).removeAddress(contractAddress),
       ).to.be.revertedWithCustomError(contractManager, "Unauthorized");
     });
 
@@ -155,15 +189,15 @@ describe("ContractManager", function () {
       );
 
       await expect(
-        contractManager.addAddresses(addr2.address, "Addr2 address"),
+        contractManager.addAddresses(contractAddress, "Addr2 address"),
       ).to.be.revertedWithCustomError(contractManager, "Unauthorized");
 
       await expect(
-        contractManager.updateDescription(addr1.address, "Updated by addr1"),
+        contractManager.updateDescription(contractAddress, "Updated by addr1"),
       ).to.be.revertedWithCustomError(contractManager, "Unauthorized");
 
       await expect(
-        contractManager.removeAddress(addr1.address),
+        contractManager.removeAddress(contractAddress),
       ).to.be.revertedWithCustomError(contractManager, "Unauthorized");
     });
   });

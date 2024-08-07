@@ -3,6 +3,7 @@ import "@nomicfoundation/hardhat-toolbox";
 import "@typechain/hardhat";
 import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-chai-matchers";
+import "hardhat-deploy";
 
 require("dotenv").config();
 
@@ -41,6 +42,13 @@ const config: HardhatUserConfig = {
         ? [`0x${process.env.DEPLOYER_PRIVATE_KEY}`]
         : [],
     },
+  },
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY,
+  },
+  // Hardhat deploy
+  namedAccounts: {
+    deployer: 0,
   },
 };
 

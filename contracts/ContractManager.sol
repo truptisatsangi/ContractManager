@@ -8,8 +8,7 @@ import "./AccessControlWrapper.sol";
  * @dev Manages a set of contract addresses with associated descriptions.
  *      Includes functionality for adding, updating, and removing addresses.
  */
-contract ContractManager is  AccessControlWrapper {
-
+contract ContractManager is AccessControlWrapper {
     /// @notice Mapping from contract address to its description.
     mapping(address => string) public addDescription;
 
@@ -28,9 +27,12 @@ contract ContractManager is  AccessControlWrapper {
     /// @notice Error indicating that an address does not exist.
     /// @param add The address that does not exist.
     error AddressNotExist(address add);
-        
+
     /// @notice Error indicating that the caller is not authorized to perform an action.
-    error Unauthorized(); 
+    error Unauthorized();
+
+    /// @notice Error indicating empty description is not allowed
+    error EmptyDescriptionNotAllowed();
 
     /**
      * @notice Adds a new address with its description.
@@ -38,11 +40,20 @@ contract ContractManager is  AccessControlWrapper {
      * @param newAddress The address to be added.
      * @param description The description of the address.
      */
-    function addAddresses(address newAddress, string calldata description) external {
+    function addAddresses(
+        address newAddress,
+        string calldata description
+    ) external {
         _checkAccessAllowed("addAddresses(address,string)");
+        require(_isValidContractAddress(newAddress), "Not a valid address");
 
-        require(newAddress != address(0), "zero address not allowed");
-        require(bytes(addDescription[newAddress]).length == 0, "Address already exists");
+        require(
+            bytes(addDescription[newAddress]).length == 0,
+            "Address already exists"
+        );
+        if (bytes(description).length == 0) {
+            revert EmptyDescriptionNotAllowed();
+        }
 
         addDescription[newAddress] = description;
         emit AddAddress(newAddress);
@@ -54,9 +65,15 @@ contract ContractManager is  AccessControlWrapper {
      * @param existingAddress The address whose description is to be updated.
      * @param description The new description of the address.
      */
-    function updateDescription(address existingAddress, string calldata description) external {
+    function updateDescription(
+        address existingAddress,
+        string calldata description
+    ) external {
         _checkAccessAllowed("updateDescription(address,string)");
 
+        if (bytes(description).length == 0) {
+            revert EmptyDescriptionNotAllowed();
+        }
         if (bytes(addDescription[existingAddress]).length == 0) {
             revert AddressNotExist(existingAddress);
         }
@@ -74,7 +91,7 @@ contract ContractManager is  AccessControlWrapper {
 
         if (bytes(addDescription[existingAddress]).length == 0) {
             revert AddressNotExist(existingAddress);
-        } 
+        }
         delete addDescription[existingAddress];
         emit RemoveAddress(existingAddress);
     }
@@ -89,5 +106,21 @@ contract ContractManager is  AccessControlWrapper {
         if (!isAllowed) {
             revert Unauthorized();
         }
+    }
+
+    /**
+     * @dev Checks for valid address
+     * @param contractAddress Address of the contract
+     */
+    function _isValidContractAddress(
+        address contractAddress
+    ) internal view returns (bool) {
+        uint256 size;
+
+        // Return the size of the code at the contractAddress
+        assembly {
+            size := extcodesize(contractAddress)
+        }
+        return size > 0;
     }
 }
