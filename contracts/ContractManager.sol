@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./AccessControlWrapper.sol";
 
 /**
@@ -10,7 +8,7 @@ import "./AccessControlWrapper.sol";
  * @dev Manages a set of contract addresses with associated descriptions.
  *      Includes functionality for adding, updating, and removing addresses.
  */
-contract ContractManager is AccessControl, Initializable, AccessControlWrapper {
+contract ContractManager is  AccessControlWrapper {
 
     /// @notice Mapping from contract address to its description.
     mapping(address => string) public addDescription;
@@ -86,7 +84,7 @@ contract ContractManager is AccessControl, Initializable, AccessControlWrapper {
      * @param signature The function signature to check.
      */
     function _checkAccessAllowed(string memory signature) internal view {
-        bool isAllowed = isAllowedToCall(msg.sender, signature);
+        bool isAllowed = isAllowedToCall(address(this), msg.sender, signature);
 
         if (!isAllowed) {
             revert Unauthorized();

@@ -2,7 +2,7 @@
 pragma solidity 0.8.25;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract AccessControlWrapper is AccessControl {
+abstract contract AccessControlWrapper is AccessControl {
     /// @notice Emitted when an account is given a permission to a certain contract function
     /// @dev If contract address is 0x000..0 this means that the account is a default admin of this function and
     /// can call any contract function with this signature
@@ -69,16 +69,17 @@ contract AccessControlWrapper is AccessControl {
 
     /**
      * @notice Verifies if the given account can call a contract's guarded function
-     * @dev Since restricted contracts using this function as a permission hook, we can get contracts address with msg.sender
+     * @dev Since restricted contracts using this function as a permission hook
      * @param account for which call permissions will be checked
      * @param functionSig restricted function signature e.g. "functionName(uint256,bool)"
      * @return false if the user account cannot call the particular contract function
      */
     function isAllowedToCall(
+        address contractAddress,
         address account,
         string memory functionSig
     ) public view returns (bool) {
-        bytes32 role = keccak256(abi.encodePacked(msg.sender, functionSig));
+        bytes32 role = keccak256(abi.encodePacked(contractAddress, functionSig));
 
         if (hasRole(role, account)) {
             return true;
@@ -86,24 +87,5 @@ contract AccessControlWrapper is AccessControl {
             role = keccak256(abi.encodePacked(address(0), functionSig));
             return hasRole(role, account);
         }
-    }
-
-    /**
-     * @notice Verifies if the given account can call a contract's guarded function
-     * @dev This function is used as a view function to check permissions rather than contract hook for access restriction check.
-     * @param account for which call permissions will be checked against
-     * @param contractAddress address of the restricted contract
-     * @param functionSig signature of the restricted function e.g. "functionName(uint256,bool)"
-     * @return false if the user account cannot call the particular contract function
-     */
-    function hasPermission(
-        address account,
-        address contractAddress,
-        string calldata functionSig
-    ) public view returns (bool) {
-        bytes32 role = keccak256(
-            abi.encodePacked(contractAddress, functionSig)
-        );
-        return hasRole(role, account);
     }
 }
